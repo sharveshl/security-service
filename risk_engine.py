@@ -1,5 +1,6 @@
-from url_checker import extract_urls, basic_url_check
+from url_checker import extract_urls
 from keyword_detector import keyword_risk
+from google_safe_browsing import check_url_with_google
 
 BLOCK_THRESHOLD = 5
 
@@ -10,9 +11,9 @@ def analyze_message(text):
     urls = extract_urls(text)
 
     for url in urls:
-        if basic_url_check(url):
-            risk_score += 5
-            reasons.append(f"Suspicious URL detected: {url}")
+        if check_url_with_google(url):
+            risk_score += 10
+            reasons.append(f"Google flagged malicious URL: {url}")
 
     keyword_score = keyword_risk(text)
     risk_score += keyword_score
