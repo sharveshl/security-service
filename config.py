@@ -23,7 +23,7 @@ class Settings:
     # Rate Limiting
     RATE_LIMIT: str = os.getenv("RATE_LIMIT", "30/minute")
 
-    # Risk Engine
+    # Risk Engine Thresholds
     BLOCK_THRESHOLD: int = int(os.getenv("BLOCK_THRESHOLD", "5"))
     WARN_THRESHOLD: int = int(os.getenv("WARN_THRESHOLD", "3"))
 

@@ -17,3 +17,9 @@ services:
         sync: false
       - key: API_KEY
         sync: false
+      - key: BLOCK_THRESHOLD
+        value: "5"
+      - key: WARN_THRESHOLD
+        value: "3"
+      - key: RATE_LIMIT
+        value: "30/minute"

@@ -1,4 +1,8 @@
-"""Risk engine — orchestrates all detection modules and produces a final verdict."""
+"""Risk engine — orchestrates all detection modules and produces a final verdict.
+
+Uses keyword-based detection and URL analysis only (no LLM dependency).
+This makes the service fast, dependency-free, and fully deterministic.
+"""
 
 import logging
 from datetime import datetime, timezone
@@ -37,6 +41,8 @@ def analyze_message(text: str) -> dict:
     """
     Analyze a chat message for scam, fraud, and phishing indicators.
 
+    Uses keyword matching and URL analysis (Google Safe Browsing + local patterns).
+
     Returns a structured result dict with score, action, risk level,
     reasons, matched details, and metadata.
     """
@@ -63,9 +69,10 @@ def analyze_message(text: str) -> dict:
             if url not in flagged_urls:
                 flagged_urls.append(url)
 
-    # ── Keyword Analysis ───────────────────────────────────────────
+    # ── Content Analysis (keyword matching) ───────────────────────
     kw_result = keyword_risk(text)
     risk_score += kw_result["score"]
+    details["detection_method"] = "keyword"
 
     if kw_result["matched_keywords"]:
         reasons.append(
@@ -73,6 +80,13 @@ def analyze_message(text: str) -> dict:
         )
         details["matched_keywords"] = kw_result["matched_keywords"]
         details["matched_categories"] = kw_result["matched_categories"]
+        details["risk_categories"] = kw_result["matched_categories"]
+
+    logger.info(
+        "Keyword analysis complete — score=%d keywords=%s",
+        kw_result["score"],
+        kw_result["matched_keywords"],
+    )
 
     # ── Final Verdict ──────────────────────────────────────────────
     action = _determine_action(risk_score)
