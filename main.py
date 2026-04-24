@@ -4,10 +4,12 @@ Security Service — Production-grade message analysis microservice.
 Detects scam, fraud messages, phishing links for chat applications.
 """
 
+import asyncio
 import logging
 import sys
 import time
 
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -57,13 +59,33 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
 
 
-# ── Startup / Shutdown ─────────────────────────────────────────────
+# ── Keep-Alive Configuration ───────────────────────────────────────
+KEEP_ALIVE_URL = "https://chatnow-backend-j17m.onrender.com"
+KEEP_ALIVE_INTERVAL = 45  # seconds
+
 _start_time: float = 0.0
+_keep_alive_task: asyncio.Task | None = None
+
+
+async def _keep_alive_loop():
+    """Periodically ping the main backend to prevent Render from spinning it down."""
+    logger.info("Keep-alive task started — pinging %s every %ds", KEEP_ALIVE_URL, KEEP_ALIVE_INTERVAL)
+    async with httpx.AsyncClient(timeout=10) as client:
+        while True:
+            await asyncio.sleep(KEEP_ALIVE_INTERVAL)
+            try:
+                response = await client.get(KEEP_ALIVE_URL)
+                logger.info("Keep-alive ping → %s (HTTP %d)", KEEP_ALIVE_URL, response.status_code)
+            except Exception as exc:
+                logger.warning("Keep-alive ping failed → %s: %s", KEEP_ALIVE_URL, exc)
+
+
+# ── Startup / Shutdown ─────────────────────────────────────────────
 
 
 @app.on_event("startup")
 async def on_startup():
-    global _start_time
+    global _start_time, _keep_alive_task
     _start_time = time.time()
     logger.info(
         "Security Service started — env=%s, log_level=%s",
@@ -72,6 +94,20 @@ async def on_startup():
     )
     if not settings.GOOGLE_SAFE_BROWSING_API_KEY:
         logger.warning("GOOGLE_SAFE_BROWSING_API_KEY is not set — URL scanning will be limited")
+    # Start keep-alive background task
+    _keep_alive_task = asyncio.create_task(_keep_alive_loop())
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    global _keep_alive_task
+    if _keep_alive_task and not _keep_alive_task.done():
+        _keep_alive_task.cancel()
+        try:
+            await _keep_alive_task
+        except asyncio.CancelledError:
+            pass
+    logger.info("Keep-alive task stopped.")
 
 
 
